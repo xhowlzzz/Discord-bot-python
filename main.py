@@ -1,77 +1,85 @@
-import discord
 import os
-from data.keep_alive import keep_alive
+import discord
 from discord.ext import commands
+import asyncio
+import random
+from keep_alive import keep_alive
 
-client = commands.Bot(command_prefix = "#", case_insensitive=True)
-client.remove_command("help")
+keep_alive()
 
+intents = discord.Intents.default()
+intents.message_content = True
+intents.reactions = True
 
-@client.event
-async def on_member_join(ctx,member):
-    await ctx.send( f'Hi {member.name}, welcome to cul-Ahem server')
-    await member.dm_channel.send(
-        f'Hi {member.name}, welcome to cul-Ahem server'
-    )
+client = discord.Client(intents=intents)
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+reacted_users = []  # Define reacted_users as a global variable
 
 @client.event
 async def on_ready():
-  print("Bot is online!")
-  await client.change_presence(activity=discord.Activity(type=discord.ActivityType.listening, name='#help'))
+    print('We have logged in as {0.user}'.format(client))
 
-#COGS ====>
+@client.event
+async def on_message(message):
+    global reacted_users  # Reference the global variable
 
-modules = ['games', 'corona', 'admin', 'events', 'fun', 'help', 'info', 'weather', 'api', 'anime', 'meme']
-try:
-    for module in modules:
-        client.load_extension('cogs.' + module)
-        print(f'Loaded: {module}.')
-except Exception as e:
-    print(f'Error loading {module}: {e}')
+    if message.author == client.user:
+        return
 
-print('Bot.....Activated')
+    if message.content.startswith('$hello'):
+        await message.channel.send('Hello!')
 
-#====START ====>
+@bot.command()
+async def pacific(ctx):
+    global reacted_users  # Reference the global variable
 
-#EVENTS====>    
+    # Send message asking for reactions
+    react_message = await ctx.send('@everyone react pentru pacific')
+    # Add verify reaction
+    await react_message.add_reaction('✅')
 
-### --SHIFTED TO COGS ---###
+    # Initialize reaction count
+    reaction_count = 0
+    reacted_users = []  # Reset the reacted_users list
+    while reaction_count < 21:
+        # Wait for reactions
+        reaction, user = await ctx.bot.wait_for('reaction_add')
+        # If the reaction is on the correct message
+        if reaction.message.id == react_message.id and str(reaction.emoji) == '✅':
+            reacted_users.append(user.name)
+            reaction_count += 1
+        # If someone reacts and they go over the limit, delete their reaction
+        if reaction_count >= 21:
+            await reaction.remove(user)
 
-#GAMES ====>
+    # Create and send list of users who reacted
+    react_list = '\n'.join(reacted_users)
+    await ctx.send(f"List of users who reacted:\n{react_list}")
 
-### --SHIFTED TO COGS ---###
+@bot.command()
+async def choose(ctx):
+    global reacted_users  # Reference the global variable
 
-#CORONA ====>
-
-### --SHIFTED TO COGS ---###
-
-#ADMINISTRATOR COMMANDS====>
-
-### --SHIFTED TO COGS ---###
-
-#HELP====>
-
-### --SHIFTED TO COGS ---###
-
-#ERROR HANDLING====>
+    if reacted_users:
+        chosen_users = random.sample(reacted_users, k=2)
+        await ctx.send(f"The chosen users are: {chosen_users[0]} and {chosen_users[1]}")
+    else:
+        await ctx.send("No users reacted to the message yet.")
 
 @client.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        await ctx.send("Command not found. Please type in a valid command.")
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("Missing required arguments. Please type in *all* arguments.")    
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send("You do not have the necessary permissions.")
-    elif isinstance(error, commands.CommandOnCooldown):
-      msg = "You are on cooldown, please try again in {:.2f}s".format(error.retry_after)
-      await ctx.send(msg)
+        await ctx.send("Invalid command.")
 
-#API====>
-
-### --SHIFTED TO COGS ---###
-
-#<====END====
-
-keep_alive()
-client.run(os.getenv('TOKEN'))
+try:
+    token = os.getenv("TOKEN") or ""
+    if token == "":
+        raise Exception("Please add your token to the Secrets pane.")
+    bot.run(token)
+except discord.HTTPException as e:
+    if e.status == 429:
+        print("The Discord servers denied the connection for making too many requests")
+        print("Get help from https://stackoverflow.com/questions/66724687/in-discord-py-how-to-solve-the-error-for-toomanyrequests")
+    else:
+        raise e
